@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 
 import * as csv from 'csv';
 
 export type FinancialRecord = {
   id: string;
   scale: number;
+
+  filename: string;
 
   startDate: Date;
   endDate: Date;
@@ -13,8 +16,6 @@ export type FinancialRecord = {
 };
 
 export class Loader {
-  constructor(protected readonly) {}
-
   protected parseFile(csvFilePath: string): Promise<Array<FinancialRecord>> {
     return new Promise<Array<FinancialRecord>>((resolve, reject) => {
       const output: Array<FinancialRecord> = [];
@@ -37,11 +38,11 @@ export class Loader {
           const startDate = entries[0].date;
           const endDate = entries[entries.length - 1].date;
 
-          console.log('r', record);
-
           output.push({
             id,
             scale: Number(scale),
+
+            filename: basename(csvFilePath),
 
             startDate,
             endDate,

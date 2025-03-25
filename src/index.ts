@@ -10,6 +10,7 @@ import decompress from 'decompress';
 import { FileStorage } from './lib/file-storage';
 import { S3FileStorage } from './lib/s3-file-storage';
 import { Loader } from './lib/loader';
+import { Filter } from './lib/filter';
 
 const s3Client = new S3Client({
   region: env('AWS_REGION').required().asString(),
@@ -70,12 +71,23 @@ const DIST_DIR = joinPath(TEMP_DIR, 'dist');
   );
 
   // load CSV files and apply filters
-  const loader = new Loader(csvFilesPath);
+  const loader = new Loader();
 
   // load files (parse CSV)
   const records = await loader.parseFiles(...csvFilesPath);
 
-  console.log('Loaded records:', records);
+  const filter = new Filter(records);
+
+  // Return the value of the entry in row "MO_BS_INV" and with a start date of 2014-10-01 in file "MNZIRS0108.csv".
+  const result1 = filter.findRow({
+    id: 'MO_BS_INV',
+    fileName: 'MNZIRS0108.csv',
+
+    date: new Date('2014-10-01'),
+  });
+
+  // console.log('Loaded records:', records);
+  console.log('Result 1:', result1);
 })()
   .then((_) => console.log(_))
   .catch(console.error);
