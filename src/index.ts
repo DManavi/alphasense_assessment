@@ -1,12 +1,15 @@
 import { tmpdir } from 'node:os';
 import { join as joinPath, basename } from 'node:path';
 import { mkdirSync, createWriteStream } from 'node:fs';
+import { globSync } from 'glob';
 
 import { S3Client } from '@aws-sdk/client-s3';
 import { get as env } from 'env-var';
+import decompress from 'decompress';
 
 import { FileStorage } from './lib/file-storage';
 import { S3FileStorage } from './lib/s3-file-storage';
+import { Loader } from './lib/loader';
 
 const s3Client = new S3Client({
   region: env('AWS_REGION').required().asString(),
@@ -22,26 +25,57 @@ const COMPANY_DATA_PATH = env('APP_COMPANY_DATA_PATH').required().asString();
 // create temporary directory
 const RUN_ID = new Date().valueOf();
 const TEMP_DIR = joinPath(tmpdir(), `alphasense-assessment-${RUN_ID}`);
-mkdirSync(TEMP_DIR);
+const DIST_DIR = joinPath(TEMP_DIR, 'dist');
+
+// create directories (if not exists)
+[TEMP_DIR, DIST_DIR].forEach((dir) => mkdirSync(dir, { recursive: true }));
 
 (async () => {
+  // list files in the company data path
   const files = await fileStorage.getAvailableFiles({
     path: COMPANY_DATA_PATH,
   });
 
+  // download each file
   for (const filePath of files) {
-    const stream = await fileStorage.getDownloadStream({ filePath });
+    const downloadStream = await fileStorage.getDownloadStream({ filePath });
 
     const fileName = basename(filePath);
     const savePath = joinPath(TEMP_DIR, fileName);
 
     const fileWriteStream = createWriteStream(savePath);
-    stream.pipe(fileWriteStream);
+    downloadStream.pipe(fileWriteStream);
+
+    // wait for the file to be downloaded (stream to finish)
+    await new Promise((resolve, reject) => {
+      fileWriteStream.on('finish', resolve);
+      fileWriteStream.on('error', reject);
+    });
 
     console.log(`Downloaded ${fileName} to ${savePath}`);
   }
 
-  return files;
+  // list downloaded files
+  const zipFiles = globSync('*.zip', { cwd: TEMP_DIR });
+
+  // extract each zip file
+  for (const zipFile of zipFiles) {
+    await decompress(joinPath(TEMP_DIR, zipFile), DIST_DIR);
+  }
+
+  // list extracted files
+  const csvFilesPath = globSync('*.csv', { cwd: DIST_DIR }).map((file) =>
+    // return full path
+    joinPath(DIST_DIR, file)
+  );
+
+  // load CSV files and apply filters
+  const loader = new Loader(csvFilesPath);
+
+  // load files (parse CSV)
+  const records = await loader.parseFiles(...csvFilesPath);
+
+  console.log('Loaded records:', records);
 })()
   .then((_) => console.log(_))
   .catch(console.error);

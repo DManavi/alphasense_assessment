@@ -15,7 +15,8 @@
     "baseUrl": ".",
     "paths": {
       "@alphasense-assessment/source": ["src/index.ts"]
-    }
+    },
+    "esModuleInterop": true
   },
   "files": [],
   "include": [],
